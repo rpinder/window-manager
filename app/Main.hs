@@ -70,10 +70,10 @@ mapWindowPos dpy win f g = do
       newx = f (fromIntegral (wa_x attr))
       newy = g (fromIntegral (wa_y attr))
       x = if newx > maxx
-          then maxx
-          else if newx < 0
-                  then 0
-                  else newx
+             then maxx
+             else if newx < 0
+                     then 0
+                     else newx
       y = if newy > maxy
              then maxy
              else if newy < 0
@@ -83,8 +83,24 @@ mapWindowPos dpy win f g = do
 
 mapWindowSize :: Display -> Window -> (Dimension -> Dimension) -> (Dimension -> Dimension) -> IO ()
 mapWindowSize dpy win f g = do
+  root_attr <- getWindowAttributes dpy $ defaultRootWindow dpy
   attr <- getWindowAttributes dpy win
-  resizeWindow dpy win (f (fromIntegral (wa_width attr))) (g (fromIntegral (wa_height attr)))
+  let maxwidth = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_x attr)
+      maxheight = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_y attr)
+      newwidth = f (fromIntegral $ wa_width attr) 
+      newheight = g (fromIntegral $ wa_height attr)
+      width = if newwidth > maxwidth
+                 then maxwidth
+                 else if newwidth < 0
+                         then 1
+                         else newwidth
+      height = if newheight > maxheight
+                 then maxheight
+                 else if newheight < 0
+                         then 1
+                         else newheight
+
+  resizeWindow dpy win width height
 
 handle :: Display -> Event -> IO ()
 handle dpy (KeyEvent{ev_event_type = typ, ev_subwindow=subwin, ev_state = state, ev_keycode = code})
