@@ -37,7 +37,7 @@ keysyms :: Display -> IO (M.Map (KeyCode, KeyMask) Action)
 keysyms dpy = do
   let
     f (a, b) = do
-      code <- (keysymToKeycode dpy (stringToKeysym a))
+      code <- keysymToKeycode dpy (stringToKeysym a)
       return (code, b)
   m <- sequence $ M.map f keybinds
   return $ mapconvert m
@@ -63,8 +63,23 @@ step = 15
 
 mapWindowPos :: Display -> Window -> (Position -> Position) -> (Position -> Position) -> IO ()
 mapWindowPos dpy win f g = do
+  root_attr <- getWindowAttributes dpy $ defaultRootWindow dpy
   attr <- getWindowAttributes dpy win 
-  moveWindow dpy win (f (fromIntegral (wa_x attr))) (g (fromIntegral (wa_y attr)))
+  let maxx = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_width attr)
+      maxy = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_height attr)
+      newx = f (fromIntegral (wa_x attr))
+      newy = g (fromIntegral (wa_y attr))
+      x = if newx > maxx
+          then maxx
+          else if newx < 0
+                  then 0
+                  else newx
+      y = if newy > maxy
+             then maxy
+             else if newy < 0
+                     then 0
+                     else newy
+  moveWindow dpy win x y
 
 mapWindowSize :: Display -> Window -> (Dimension -> Dimension) -> (Dimension -> Dimension) -> IO ()
 mapWindowSize dpy win f g = do
