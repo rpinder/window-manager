@@ -37,7 +37,7 @@ keysyms :: Display -> IO (M.Map (KeyCode, KeyMask) Action)
 keysyms dpy = do
   let
     f (a, b) = do
-      code <- keysymToKeycode dpy (stringToKeysym a)
+      code <- keysymToKeycode dpy $ stringToKeysym a
       return (code, b)
   m <- sequence $ M.map f keybinds
   return $ mapconvert m
@@ -51,7 +51,7 @@ main = do
   keys <- keysyms dpy
   let
     f (a, b) = grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
-  mapM_ f (M.keys keys)
+  mapM_ f $ M.keys keys
   forever $ do
     allocaXEvent $ \e -> do
       nextEvent dpy e
@@ -67,8 +67,8 @@ mapWindowPos dpy win f g = do
   attr <- getWindowAttributes dpy win 
   let maxx = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_width attr)
       maxy = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_height attr)
-      newx = f (fromIntegral (wa_x attr))
-      newy = g (fromIntegral (wa_y attr))
+      newx = f (fromIntegral $ wa_x attr)
+      newy = g (fromIntegral $ wa_y attr)
       x = if newx > maxx
              then maxx
              else if newx < 0
@@ -99,7 +99,6 @@ mapWindowSize dpy win f g = do
                  else if newheight < 0
                          then 1
                          else newheight
-
   resizeWindow dpy win width height
 
 handle :: Display -> Event -> IO ()
