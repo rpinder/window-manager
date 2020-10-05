@@ -6,8 +6,21 @@ import Control.Monad
 import qualified Data.Map as M
 import Data.Tuple (swap)
 import Data.Maybe (fromMaybe)
-import Data.Char (isUpper)
 import Data.Bits 
+import Control.Monad.Reader
+import Control.Monad.State
+
+data Xstate = Xstate
+            { display :: Display
+            , root :: Window
+            , keybinds :: M.Map (KeyCode, KeyMask) Action
+            , focused :: Window
+            }
+
+changeFocused :: Window -> Xstate -> Xstate
+changeFocused win xs = xs{focused=win}
+
+type X = StateT Xstate IO ()
 
 data Action = MoveLeft
             | MoveUp
@@ -21,8 +34,8 @@ data Action = MoveLeft
             | None
             deriving (Eq, Ord)
 
-keybinds :: M.Map Action (String, KeyMask)
-keybinds = M.fromList [ (MoveLeft, ("h", mod1Mask))
+keybindsmap :: M.Map Action (String, KeyMask)
+keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
                       , (MoveDown, ("j", mod1Mask))
                       , (MoveUp, ("k", mod1Mask))
                       , (MoveRight, ("l", mod1Mask))
@@ -39,7 +52,7 @@ keysyms dpy = do
     f (a, b) = do
       code <- keysymToKeycode dpy $ stringToKeysym a
       return (code, b)
-  m <- sequence $ M.map f keybinds
+  m <- sequence $ M.map f keybindsmap
   return $ mapconvert m
   where
     mapconvert :: Ord a => M.Map k a -> M.Map a k
@@ -56,66 +69,80 @@ main = do
     allocaXEvent $ \e -> do
       nextEvent dpy e
       ev <- getEvent e
-      handle dpy ev
+      execStateT (handle ev) $ Xstate dpy (defaultRootWindow dpy) keys none
 
 step :: Num a => a
 step = 15
 
-mapWindowPos :: Display -> Window -> (Position -> Position) -> (Position -> Position) -> IO ()
-mapWindowPos dpy win f g = do
-  root_attr <- getWindowAttributes dpy $ defaultRootWindow dpy
-  attr <- getWindowAttributes dpy win 
-  let maxx = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_width attr)
-      maxy = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_height attr)
-      newx = f (fromIntegral $ wa_x attr)
-      newy = g (fromIntegral $ wa_y attr)
-      x = if newx > maxx
-             then maxx
-             else if newx < 0
-                     then 0
-                     else newx
-      y = if newy > maxy
-             then maxy
-             else if newy < 0
-                     then 0
-                     else newy
-  moveWindow dpy win x y
+mapWindowPos :: (Position -> Position) -> (Position -> Position) -> X
+mapWindowPos f g = do
+  dpy <- gets display
+  win <- gets focused
+  if win == none
+    then return ()
+    else do
+      root_attr <- liftIO $ getWindowAttributes dpy $ defaultRootWindow dpy
+      attr <- liftIO $ getWindowAttributes dpy win 
+      let maxx = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_width attr)
+          maxy = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_height attr)
+          newx = f (fromIntegral $ wa_x attr)
+          newy = g (fromIntegral $ wa_y attr)
+          x = if newx > maxx
+              then maxx
+              else if newx < 0
+                   then 0
+                   else newx
+          y = if newy > maxy
+              then maxy
+              else if newy < 0
+                   then 0
+                   else newy
+      liftIO $ moveWindow dpy win x y
 
-mapWindowSize :: Display -> Window -> (Dimension -> Dimension) -> (Dimension -> Dimension) -> IO ()
-mapWindowSize dpy win f g = do
-  root_attr <- getWindowAttributes dpy $ defaultRootWindow dpy
-  attr <- getWindowAttributes dpy win
-  let maxwidth = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_x attr)
-      maxheight = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_y attr)
-      newwidth = f (fromIntegral $ wa_width attr) 
-      newheight = g (fromIntegral $ wa_height attr)
-      width = if newwidth > maxwidth
-                 then maxwidth
-                 else if newwidth < 0
-                         then 1
-                         else newwidth
-      height = if newheight > maxheight
-                 then maxheight
-                 else if newheight < 0
-                         then 1
-                         else newheight
-  resizeWindow dpy win width height
+mapWindowSize :: (Dimension -> Dimension) -> (Dimension -> Dimension) -> X
+mapWindowSize f g = do
+  dpy <- gets display
+  win <- gets focused
+  if win == none
+    then return ()
+    else do
+      root_attr <- liftIO $ getWindowAttributes dpy $ defaultRootWindow dpy
+      attr <- liftIO $ getWindowAttributes dpy win
+      let maxwidth = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_x attr)
+          maxheight = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_y attr)
+          newwidth = f (fromIntegral $ wa_width attr) 
+          newheight = g (fromIntegral $ wa_height attr)
+          width = if newwidth > maxwidth
+                  then maxwidth
+                  else if newwidth < 0
+                       then 1
+                       else newwidth
+          height = if newheight > maxheight
+                   then maxheight
+                   else if newheight < 0
+                        then 1
+                        else newheight
+      liftIO $ resizeWindow dpy win width height
 
-handle :: Display -> Event -> IO ()
-handle dpy (KeyEvent{ev_event_type = typ, ev_subwindow=subwin, ev_state = state, ev_keycode = code})
+handle :: Event -> X
+handle KeyEvent{ev_event_type = typ, ev_subwindow=subwin, ev_state = evstate, ev_keycode = code}
   | typ == keyPress = do
-      keys <- keysyms dpy
-      handleAction (fromMaybe None (M.lookup (code, state) keys)) dpy subwin
-handle _ _  = return () 
+      keys <- gets keybinds
+      modify $ changeFocused subwin
+      handleAction (fromMaybe None (M.lookup (code, evstate) keys))
+handle _  = return () 
 
-handleAction :: Action -> Display -> Window -> IO ()
-handleAction MoveLeft dpy win = mapWindowPos dpy win (subtract step) id
-handleAction MoveDown dpy win = mapWindowPos dpy win id (+ step)
-handleAction MoveUp dpy win = mapWindowPos dpy win id (subtract step)
-handleAction MoveRight dpy win = mapWindowPos dpy win (+ step) id
-handleAction Raise dpy win = raiseWindow dpy win
-handleAction IncreaseWidth dpy win = mapWindowSize dpy win (+ step) id
-handleAction DecreaseWidth dpy win = mapWindowSize dpy win (subtract step) id
-handleAction IncreaseHeight dpy win = mapWindowSize dpy win id (+ step)
-handleAction DecreaseHeight dpy win = mapWindowSize dpy win id (subtract step)
-handleAction _ _ _ = return ()
+handleAction :: Action -> X
+handleAction MoveLeft = mapWindowPos (subtract step) id
+handleAction MoveDown = mapWindowPos id (+ step)
+handleAction MoveUp = mapWindowPos id (subtract step)
+handleAction MoveRight = mapWindowPos (+ step) id
+handleAction Raise = do
+  dpy <- gets display
+  win <- gets focused
+  liftIO $ raiseWindow dpy win
+handleAction IncreaseWidth = mapWindowSize (+ step) id
+handleAction DecreaseWidth = mapWindowSize (subtract step) id
+handleAction IncreaseHeight = mapWindowSize id (+ step)
+handleAction DecreaseHeight = mapWindowSize id (subtract step)
+handleAction _  = return ()
