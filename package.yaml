@@ -24,6 +24,7 @@ dependencies:
 - X11
 - containers
 - mtl
+- process
 
 library:
   source-dirs: src

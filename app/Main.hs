@@ -9,6 +9,7 @@ import Data.Maybe (fromMaybe)
 import Data.Bits 
 import Control.Monad.Reader
 import Control.Monad.State
+import System.Process
 
 data Xstate = Xstate
             { display :: Display
@@ -31,6 +32,7 @@ data Action = MoveLeft
             | IncreaseHeight
             | DecreaseHeight
             | Raise
+            | Launch String
             | None
             deriving (Eq, Ord)
 
@@ -43,6 +45,7 @@ keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
                       , (IncreaseHeight, ("j", mod1Mask .|. shiftMask))
                       , (DecreaseHeight, ("k", mod1Mask .|. shiftMask))
                       , (IncreaseWidth, ("l", mod1Mask .|. shiftMask))
+                      , (Launch "dmenu_run", ("d", mod1Mask))
                       , (Raise, ("r", mod1Mask))
                       ]
 
@@ -145,4 +148,7 @@ handleAction IncreaseWidth = mapWindowSize (+ step) id
 handleAction DecreaseWidth = mapWindowSize (subtract step) id
 handleAction IncreaseHeight = mapWindowSize id (+ step)
 handleAction DecreaseHeight = mapWindowSize id (subtract step)
+handleAction (Launch cmd) = liftIO $ do
+  _ <- runCommand cmd
+  return ()
 handleAction _  = return ()
