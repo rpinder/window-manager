@@ -138,7 +138,10 @@ handle ConfigureEvent{} = return ()
 
 handle MapRequestEvent{ev_window = window} = do
   dpy <- gets display
-  liftIO $ mapWindow dpy window
+  liftIO $ do
+    setWindowBorderWidth dpy window 5
+    setWindowBorder dpy window $ blackPixel dpy (defaultScreen dpy)
+    mapWindow dpy window
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
   dpy <- gets display
