@@ -34,7 +34,7 @@ data Action = MoveLeft
             | Raise
             | Launch String
             | None
-            deriving (Eq, Ord)
+            deriving (Eq, Ord, Show)
 
 keybindsmap :: M.Map Action (String, KeyMask)
 keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
@@ -65,8 +65,8 @@ main :: IO ()
 main = do
   dpy <- openDisplay ""
   keys <- keysyms dpy
-  let
-    f (a, b) = grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
+  selectInput dpy (defaultRootWindow dpy) $ substructureRedirectMask .|. substructureNotifyMask
+  let f (a, b) = grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
   mapM_ f $ M.keys keys
   forever $ do
     allocaXEvent $ \e -> do
@@ -133,7 +133,19 @@ handle KeyEvent{ev_event_type = typ, ev_subwindow=subwin, ev_state = evstate, ev
       keys <- gets keybinds
       modify $ changeFocused subwin
       handleAction (fromMaybe None (M.lookup (code, evstate) keys))
-handle _  = return () 
+
+handle ConfigureEvent{} = return ()
+
+handle MapRequestEvent{ev_window = window} = do
+  dpy <- gets display
+  liftIO $ mapWindow dpy window
+
+handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
+  dpy <- gets display
+  let wc = WindowChanges x y width height border_width above detail
+  liftIO $ configureWindow dpy window value_mask wc
+
+handle x  = liftIO $ print x
 
 handleAction :: Action -> X
 handleAction MoveLeft = mapWindowPos (subtract step) id
@@ -143,7 +155,9 @@ handleAction MoveRight = mapWindowPos (+ step) id
 handleAction Raise = do
   dpy <- gets display
   win <- gets focused
-  liftIO $ raiseWindow dpy win
+  if win == none
+    then return ()
+    else liftIO $ raiseWindow dpy win
 handleAction IncreaseWidth = mapWindowSize (+ step) id
 handleAction DecreaseWidth = mapWindowSize (subtract step) id
 handleAction IncreaseHeight = mapWindowSize id (+ step)
@@ -151,4 +165,4 @@ handleAction DecreaseHeight = mapWindowSize id (subtract step)
 handleAction (Launch cmd) = liftIO $ do
   _ <- runCommand cmd
   return ()
-handleAction _  = return ()
+handleAction x  = liftIO $ print x
