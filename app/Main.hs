@@ -2,21 +2,25 @@ module Main where
 
 import Graphics.X11.Xlib
 import Graphics.X11.Xlib.Extras
-import Control.Monad
 import qualified Data.Map as M
 import Data.Tuple (swap)
-import Data.Maybe (fromMaybe)
+import Data.Maybe
 import Data.Bits 
 import Control.Monad.Reader
 import Control.Monad.State
 import System.Process
+import Data.Word
 
 data Xstate = Xstate
             { display :: Display
             , root :: Window
             , keybinds :: M.Map (KeyCode, KeyMask) Action
             , focused :: Window
+            , dragging :: Maybe MouseState
             }
+
+data MouseState = MouseState { x :: Int, y :: Int, button :: Word32 }
+  deriving (Eq, Show)
 
 changeFocused :: Window -> Xstate -> Xstate
 changeFocused win xs = xs{focused=win}
@@ -67,9 +71,10 @@ main = do
   keys <- keysyms dpy
   selectInput dpy (defaultRootWindow dpy) $ substructureRedirectMask .|. substructureNotifyMask
   grabButton dpy 1 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
+  grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   let f (a, b) = grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
   mapM_ f $ M.keys keys
-  loop $ Xstate dpy (defaultRootWindow dpy) keys none
+  loop $ Xstate dpy (defaultRootWindow dpy) keys none Nothing
 
 loop :: Xstate -> IO ()
 loop s@Xstate{display=dpy}= do
@@ -159,11 +164,33 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
   let wc = WindowChanges x y width height border_width above detail
   liftIO $ configureWindow dpy window value_mask wc
 
-handle ButtonEvent{ev_subwindow = win} = do
-  liftIO $ putStrLn $ "clicked on " ++ show win
-  setFocus win
-  handleAction Raise
+handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_x = x, ev_y = y, ev_button = but}
+  | typ == buttonPress = do
+    let new = MouseState (fromIntegral x) (fromIntegral y) but
+    modify $ (\s -> s{dragging=Just new})
+    setFocus win
+    handleAction Raise
+  | typ == buttonRelease = do
+    ms <- gets dragging
+    when (ms == Nothing) $ return ()
+    modify $ (\s -> s{dragging=Nothing})
 
+handle MotionEvent{ev_x = ex, ev_y = ey} = do
+  drag <- gets dragging
+  liftIO $ do
+    print drag
+    putStrLn $ "x: " ++ show ex ++ " y: " ++ show ey
+  case drag of
+    Just d -> do
+      let dx = (fromIntegral ex) - (fromIntegral $ x d)
+      let dy = (fromIntegral ey) - (fromIntegral $ y d)
+      modify $ \s -> s{dragging=Just d{x=fromIntegral ex, y=fromIntegral ey}}
+      case button d of
+        1 -> mapWindowPos (+ dx) (+ dy)
+        3 -> mapWindowSize (+ (fromIntegral dx)) (+ (fromIntegral dy))
+        _ -> return ()
+    _ -> return ()
+    
 handle _ = return ()
 
 handleAction :: Action -> X
