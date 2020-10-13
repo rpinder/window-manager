@@ -66,13 +66,18 @@ main = do
   dpy <- openDisplay ""
   keys <- keysyms dpy
   selectInput dpy (defaultRootWindow dpy) $ substructureRedirectMask .|. substructureNotifyMask
+  grabButton dpy 1 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   let f (a, b) = grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
   mapM_ f $ M.keys keys
-  forever $ do
-    allocaXEvent $ \e -> do
-      nextEvent dpy e
-      ev <- getEvent e
-      execStateT (handle ev) $ Xstate dpy (defaultRootWindow dpy) keys none
+  loop $ Xstate dpy (defaultRootWindow dpy) keys none
+
+loop :: Xstate -> IO ()
+loop s@Xstate{display=dpy}= do
+  allocaXEvent $ \e -> do
+    nextEvent dpy e
+    ev <- getEvent e
+    s' <- execStateT (handle ev) s
+    loop s'
 
 step :: Num a => a
 step = 15
@@ -127,11 +132,16 @@ mapWindowSize f g = do
                         else newheight
       liftIO $ resizeWindow dpy win width height
 
+setFocus :: Window -> X
+setFocus w = do
+  dpy <- gets display
+  liftIO $ setInputFocus dpy w revertToParent currentTime
+  modify $ changeFocused w
+
 handle :: Event -> X
-handle KeyEvent{ev_event_type = typ, ev_subwindow=subwin, ev_state = evstate, ev_keycode = code}
+handle KeyEvent{ev_event_type = typ, ev_state = evstate, ev_keycode = code}
   | typ == keyPress = do
       keys <- gets keybinds
-      modify $ changeFocused subwin
       handleAction (fromMaybe None (M.lookup (code, evstate) keys))
 
 handle ConfigureEvent{} = return ()
@@ -142,13 +152,19 @@ handle MapRequestEvent{ev_window = window} = do
     setWindowBorderWidth dpy window 5
     setWindowBorder dpy window $ blackPixel dpy (defaultScreen dpy)
     mapWindow dpy window
+  setFocus window
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
   dpy <- gets display
   let wc = WindowChanges x y width height border_width above detail
   liftIO $ configureWindow dpy window value_mask wc
 
-handle x  = liftIO $ print x
+handle ButtonEvent{ev_subwindow = win} = do
+  liftIO $ putStrLn $ "clicked on " ++ show win
+  setFocus win
+  handleAction Raise
+
+handle _ = return ()
 
 handleAction :: Action -> X
 handleAction MoveLeft = mapWindowPos (subtract step) id
@@ -168,4 +184,4 @@ handleAction DecreaseHeight = mapWindowSize id (subtract step)
 handleAction (Launch cmd) = liftIO $ do
   _ <- runCommand cmd
   return ()
-handleAction x  = liftIO $ print x
+handleAction _  = return ()
