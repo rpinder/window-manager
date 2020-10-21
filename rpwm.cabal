@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ff3b6e400362b12e4362a062775db44998ad1e6721d5a54fd749f0122d2ea1ee
+-- hash: 17c3cd9ac8b4e4889ebb20978705c981ffcde0cce526eb9373dba1f39a74cfa9
 
 name:           rpwm
 version:        0.1.0.0
@@ -27,7 +27,11 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Config
+      Handlers
+      Helpers
+      Types
+      Utils
   other-modules:
       Paths_rpwm
   hs-source-dirs:
