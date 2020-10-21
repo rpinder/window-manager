@@ -6,26 +6,30 @@ import qualified Data.Map as M
 import Data.Tuple (swap)
 import Data.Maybe
 import Data.Bits 
-import Control.Monad.Reader
 import Control.Monad.State
 import System.Process
-import Data.Word
+import Data.List
 
 data Xstate = Xstate
             { display :: Display
             , root :: Window
             , keybinds :: M.Map (KeyCode, KeyMask) Action
-            , focused :: Window
-            , dragging :: Maybe MouseState
+            , focused :: Maybe Client
+            , dragging :: !(Maybe (Position -> Position -> X ()))
+            , windows :: ![Client]
+            , quit :: Bool
             }
 
-data MouseState = MouseState { x :: Int, y :: Int, button :: Word32 }
+data Client = Client
+            { c_x :: Position 
+            , c_y :: Position
+            , c_width :: Dimension
+            , c_height :: Dimension
+            , c_window :: Window
+            }
   deriving (Eq, Show)
 
-changeFocused :: Window -> Xstate -> Xstate
-changeFocused win xs = xs{focused=win}
-
-type X = StateT Xstate IO ()
+type X a = StateT Xstate IO a
 
 data Action = MoveLeft
             | MoveUp
@@ -38,6 +42,7 @@ data Action = MoveLeft
             | Raise
             | Launch String
             | None
+            | Quit
             deriving (Eq, Ord, Show)
 
 keybindsmap :: M.Map Action (String, KeyMask)
@@ -51,6 +56,7 @@ keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
                       , (IncreaseWidth, ("l", mod1Mask .|. shiftMask))
                       , (Launch "dmenu_run", ("d", mod1Mask))
                       , (Raise, ("r", mod1Mask))
+                      , (Quit, ("q", mod1Mask .|. shiftMask))
                       ]
 
 keysyms :: Display -> IO (M.Map (KeyCode, KeyMask) Action)
@@ -72,143 +78,178 @@ main = do
   selectInput dpy (defaultRootWindow dpy) $ substructureRedirectMask .|. substructureNotifyMask
   grabButton dpy 1 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
-  let f (a, b) = grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
-  mapM_ f $ M.keys keys
-  loop $ Xstate dpy (defaultRootWindow dpy) keys none Nothing
+  forM_ (M.keys keys) $ \(a, b) -> 
+    grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
+  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing [] False
 
-loop :: Xstate -> IO ()
-loop s@Xstate{display=dpy}= do
-  allocaXEvent $ \e -> do
+loop :: XEventPtr -> Xstate -> IO ()
+loop e s@Xstate{display=dpy}= do
     nextEvent dpy e
     ev <- getEvent e
     s' <- execStateT (handle ev) s
-    loop s'
+    unless (quit s') (loop e s')
 
 step :: Num a => a
 step = 15
 
-mapWindowPos :: (Position -> Position) -> (Position -> Position) -> X
+fi :: (Integral a, Num b) => a -> b
+fi = fromIntegral
+
+io :: MonadIO m => IO a -> m a
+io = liftIO
+
+windowToClient :: Window -> X (Maybe Client)
+windowToClient win = do
+  ws <- gets windows
+  return $ find (\c -> c_window c == win) ws
+
+mapWindowPos :: (Position -> Position) -> (Position -> Position) -> X ()
 mapWindowPos f g = do
   dpy <- gets display
-  win <- gets focused
-  if win == none
-    then return ()
-    else do
-      root_attr <- liftIO $ getWindowAttributes dpy $ defaultRootWindow dpy
-      attr <- liftIO $ getWindowAttributes dpy win 
-      let maxx = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_width attr)
-          maxy = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_height attr)
-          newx = f (fromIntegral $ wa_x attr)
-          newy = g (fromIntegral $ wa_y attr)
-          x = if newx > maxx
-              then maxx
-              else if newx < 0
-                   then 0
-                   else newx
-          y = if newy > maxy
-              then maxy
-              else if newy < 0
-                   then 0
-                   else newy
-      liftIO $ moveWindow dpy win x y
+  client <- gets focused
+  case client of
+    Just c -> do
+      let x' = f $ c_x c
+          y' = g $ c_y c
+      io $ moveWindow dpy (c_window c) x' y' 
+    Nothing -> return ()
 
-mapWindowSize :: (Dimension -> Dimension) -> (Dimension -> Dimension) -> X
+mapWindowSize :: (Dimension -> Dimension) -> (Dimension -> Dimension) -> X ()
 mapWindowSize f g = do
   dpy <- gets display
-  win <- gets focused
-  if win == none
-    then return ()
-    else do
-      root_attr <- liftIO $ getWindowAttributes dpy $ defaultRootWindow dpy
-      attr <- liftIO $ getWindowAttributes dpy win
-      let maxwidth = (fromIntegral $ wa_width root_attr) - (fromIntegral $ wa_x attr)
-          maxheight = (fromIntegral $ wa_height root_attr) - (fromIntegral $ wa_y attr)
-          newwidth = f (fromIntegral $ wa_width attr) 
-          newheight = g (fromIntegral $ wa_height attr)
-          width = if newwidth > maxwidth
-                  then maxwidth
-                  else if newwidth < 0
-                       then 1
-                       else newwidth
-          height = if newheight > maxheight
-                   then maxheight
-                   else if newheight < 0
-                        then 1
-                        else newheight
-      liftIO $ resizeWindow dpy win width height
+  client <- gets focused
+  case client of
+    Just c -> do
+      let width = f $ c_width c
+          height = g $ c_height c
+      io $ resizeWindow dpy (c_window c) width height
+    Nothing -> return ()
 
-setFocus :: Window -> X
-setFocus w = do
-  dpy <- gets display
-  liftIO $ setInputFocus dpy w revertToParent currentTime
-  modify $ changeFocused w
+setFocus :: Client -> X ()
+setFocus client = do
+    dpy <- gets display
+    io $ setInputFocus dpy (c_window client) revertToParent currentTime
+    modify $ \s -> s{focused=Just client}
 
-handle :: Event -> X
+handle :: Event -> X ()
 handle KeyEvent{ev_event_type = typ, ev_state = evstate, ev_keycode = code}
   | typ == keyPress = do
       keys <- gets keybinds
       handleAction (fromMaybe None (M.lookup (code, evstate) keys))
 
-handle ConfigureEvent{} = return ()
+handle ConfigureEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_window = window} = do
+  ws <- gets windows
+  client <- windowToClient window
+  case client of
+    Just w -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) ws}
+    Nothing -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : ws}
 
 handle MapRequestEvent{ev_window = window} = do
   dpy <- gets display
-  liftIO $ do
+  io $ do
     setWindowBorderWidth dpy window 5
     setWindowBorder dpy window $ blackPixel dpy (defaultScreen dpy)
     mapWindow dpy window
-  setFocus window
+  client <- windowToClient window
+  case client of
+    Just c -> setFocus c
+    Nothing -> return ()
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
   dpy <- gets display
   let wc = WindowChanges x y width height border_width above detail
-  liftIO $ configureWindow dpy window value_mask wc
+  io $ configureWindow dpy window value_mask wc
 
-handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_x = x, ev_y = y, ev_button = but}
-  | typ == buttonPress = do
-    let new = MouseState (fromIntegral x) (fromIntegral y) but
-    modify $ (\s -> s{dragging=Just new})
-    setFocus win
-    handleAction Raise
+handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_x = x, ev_y = y, ev_button = but, ev_root = root}
   | typ == buttonRelease = do
-    ms <- gets dragging
-    when (ms == Nothing) $ return ()
-    modify $ (\s -> s{dragging=Nothing})
+      drag <- gets dragging
+      dpy <- gets display
+      io $ ungrabPointer dpy currentTime
+      case drag of
+        Just _ -> modify $ \s -> s{dragging=Nothing}
+        Nothing -> return ()
+  | typ == buttonPress = do
+      client <- windowToClient win
+      case client of
+        Just c -> do
+          setFocus c
+          handleAction Raise
+          case but of
+            1 -> mouseMoveClient c
+            3 -> mouseResizeClient c
+        Nothing -> return ()
 
 handle MotionEvent{ev_x = ex, ev_y = ey} = do
   drag <- gets dragging
-  liftIO $ do
-    print drag
-    putStrLn $ "x: " ++ show ex ++ " y: " ++ show ey
   case drag of
-    Just d -> do
-      let dx = (fromIntegral ex) - (fromIntegral $ x d)
-      let dy = (fromIntegral ey) - (fromIntegral $ y d)
-      modify $ \s -> s{dragging=Just d{x=fromIntegral ex, y=fromIntegral ey}}
-      case button d of
-        1 -> mapWindowPos (+ dx) (+ dy)
-        3 -> mapWindowSize (+ (fromIntegral dx)) (+ (fromIntegral dy))
-        _ -> return ()
-    _ -> return ()
+    Just f -> f (fromIntegral ex) (fromIntegral ey)
+    Nothing -> return ()
     
 handle _ = return ()
 
-handleAction :: Action -> X
+raiseClient :: Client -> X ()
+raiseClient client = do
+  dpy <- gets display
+  liftIO $ raiseWindow dpy $ c_window client
+
+handleAction :: Action -> X ()
 handleAction MoveLeft = mapWindowPos (subtract step) id
 handleAction MoveDown = mapWindowPos id (+ step)
 handleAction MoveUp = mapWindowPos id (subtract step)
 handleAction MoveRight = mapWindowPos (+ step) id
 handleAction Raise = do
-  dpy <- gets display
-  win <- gets focused
-  if win == none
-    then return ()
-    else liftIO $ raiseWindow dpy win
+  client <- gets focused
+  case client of
+    Just c -> raiseClient c
+    Nothing -> return ()
 handleAction IncreaseWidth = mapWindowSize (+ step) id
 handleAction DecreaseWidth = mapWindowSize (subtract step) id
 handleAction IncreaseHeight = mapWindowSize id (+ step)
 handleAction DecreaseHeight = mapWindowSize id (subtract step)
-handleAction (Launch cmd) = liftIO $ do
+handleAction (Launch cmd) = io $ do
   _ <- runCommand cmd
   return ()
+handleAction Quit = modify $ \s -> s{quit=True}
 handleAction _  = return ()
+
+clearEventsOfMask :: EventMask -> X ()
+clearEventsOfMask mask = do
+  dpy <- gets display
+  io $ do
+    sync dpy False
+    allocaXEvent $ \e -> fix $
+      \f -> checkMaskEvent dpy mask e >>= flip when f
+
+mouseDrag :: (Position -> Position -> X ()) -> X ()
+mouseDrag f = do
+  drag <- gets dragging
+  case drag of
+    Just _ -> return ()
+    Nothing -> do
+      dpy <- gets display
+      root <- gets root
+      io $ grabPointer dpy root False (buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none currentTime
+      modify $ \s -> s{dragging = Just (\x y -> clearEventsOfMask pointerMotionMask >> f x y)}
+
+mouseMoveClient :: Client -> X ()
+mouseMoveClient client = do
+  let win = c_window client
+  dpy <- gets display
+  (_, _, _, ox, oy, _, _, _) <- io $ queryPointer dpy win
+  wa <- io $ getWindowAttributes dpy win
+  mouseDrag (\ex ey -> io $ moveWindow dpy win (wa_x wa .+ ex .- fi ox) (wa_y wa .+ ey .- fi oy))
+
+(.+) :: (Integral a, Integral b, Num c) => a -> b -> c
+a .+ b = fi a + fi b
+
+(.-) :: (Integral a, Integral b, Num c) => a -> b -> c
+a .- b = fi a - fi b
+  
+mouseResizeClient :: Client -> X ()
+mouseResizeClient client = do
+  let win = c_window client
+  dpy <- gets display
+  (_, _, _, ox, oy, _, _, _) <- io $ queryPointer dpy win
+  wa <- io $ getWindowAttributes dpy win
+  mouseDrag (\ex ey -> io $ resizeWindow dpy win (wa_width wa .+ ex .- ox) (wa_height wa .+ ey .- oy))
+
