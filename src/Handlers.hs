@@ -41,13 +41,18 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
   let wc = WindowChanges x y width height border_width above detail
   io $ configureWindow dpy window value_mask wc
 
-handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_x = x, ev_y = y, ev_button = but, ev_root = root}
+handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
   | typ == buttonRelease = do
       drag <- gets dragging
       dpy <- gets display
       io $ ungrabPointer dpy currentTime
       case drag of
-        Just _ -> modify $ \s -> s{dragging=Nothing}
+        Just _ -> do
+          modify $ \s -> s{dragging=Nothing}
+          client <- windowToClient win
+          case client of
+            Just c -> modify $ \s -> s{focused=Just c}
+            Nothing -> return ()
         Nothing -> return ()
   | typ == buttonPress = do
       client <- windowToClient win
