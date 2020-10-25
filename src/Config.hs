@@ -40,7 +40,7 @@ step :: Num a => a
 step = 15
 
 config :: IO Config
-config = return $ Config 5 "efdfbb" 15
+config = return $ Config 5 "efdfbb" "2f2c25" 15
 
 stringToColor :: String -> (Word16, Word16, Word16)
 stringToColor = tuple . map (*257) . map (fst . (!!0). readHex) . splits 2

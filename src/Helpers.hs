@@ -5,6 +5,7 @@ import Control.Monad.State
 import Data.List
 import Graphics.X11.Xlib.Extras
 import Data.Bits ((.|.))
+import Data.Maybe (isJust)
 
 import Types
 import Utils
@@ -40,8 +41,16 @@ mapWindowSize f g = do
 
 setFocus :: Client -> X ()
 setFocus client = do
+    foc <- gets focused
+    bup <- gets borderUnfocusedPixel
+    bfp <- gets borderFocusedPixel
     dpy <- gets display
-    io $ setInputFocus dpy (c_window client) revertToParent currentTime
+    io $ do
+      case foc of
+        Just c -> setWindowBorder dpy (c_window c) bup
+        Nothing -> return ()
+      setInputFocus dpy (c_window client) revertToParent currentTime
+      setWindowBorder dpy (c_window client) bfp
     modify $ \s -> s{focused=Just client}
 
 raiseClient :: Client -> X ()

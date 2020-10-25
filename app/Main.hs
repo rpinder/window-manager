@@ -19,8 +19,9 @@ main = do
   grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   forM_ (M.keys keys) $ \(a, b) -> 
     grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
-  color <- initColor dpy . borderColor =<< config
-  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing [] False color
+  fcolor <- initColor dpy . borderFocusedColor =<< config
+  ufcolor <- initColor dpy . borderUnfocusedColor =<< config
+  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing [] False fcolor ufcolor
 
 loop :: XEventPtr -> Xstate -> IO ()
 loop e s@Xstate{display=dpy}= do

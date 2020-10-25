@@ -14,7 +14,8 @@ data Xstate = Xstate
             , dragging :: !(Maybe (Position -> Position -> X ()))
             , windows :: ![Client]
             , quit :: Bool
-            , borderPixel :: Pixel
+            , borderFocusedPixel :: Pixel
+            , borderUnfocusedPixel :: Pixel
             }
 
 data Client = Client
@@ -42,6 +43,7 @@ data Action = MoveLeft
 
 data Config = Config
               { borderWidth :: Int
-              , borderColor :: String
+              , borderFocusedColor :: String
+              , borderUnfocusedColor :: String
               , step :: Int
               }
