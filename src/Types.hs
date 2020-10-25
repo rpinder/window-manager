@@ -14,6 +14,7 @@ data Xstate = Xstate
             , dragging :: !(Maybe (Position -> Position -> X ()))
             , windows :: ![Client]
             , quit :: Bool
+            , borderPixel :: Pixel
             }
 
 data Client = Client
@@ -38,3 +39,9 @@ data Action = MoveLeft
             | None
             | Quit
             deriving (Eq, Ord, Show)
+
+data Config = Config
+              { borderWidth :: Int
+              , borderColor :: String
+              , step :: Int
+              }

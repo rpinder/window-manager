@@ -27,9 +27,11 @@ handle ConfigureEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, 
 
 handle MapRequestEvent{ev_window = window} = do
   dpy <- gets display
+  bp <- gets borderPixel
   io $ do
-    setWindowBorderWidth dpy window 5
-    setWindowBorder dpy window $ blackPixel dpy (defaultScreen dpy)
+    borderWidth <- borderWidth <$> config
+    setWindowBorderWidth dpy window $ fi borderWidth
+    setWindowBorder dpy window bp
     mapWindow dpy window
   client <- windowToClient window
   case client of
@@ -74,19 +76,19 @@ handle MotionEvent{ev_x = ex, ev_y = ey} = do
 handle _ = return ()
 
 handleAction :: Action -> X ()
-handleAction MoveLeft = mapWindowPos (subtract step) id
-handleAction MoveDown = mapWindowPos id (+ step)
-handleAction MoveUp = mapWindowPos id (subtract step)
-handleAction MoveRight = mapWindowPos (+ step) id
+handleAction MoveLeft = mapWindowPos (subtract 15) id
+handleAction MoveDown = mapWindowPos id (+ 15)
+handleAction MoveUp = mapWindowPos id (subtract 15)
+handleAction MoveRight = mapWindowPos (+ 15) id
 handleAction Raise = do
   client <- gets focused
   case client of
     Just c -> raiseClient c
     Nothing -> return ()
-handleAction IncreaseWidth = mapWindowSize (+ step) id
-handleAction DecreaseWidth = mapWindowSize (subtract step) id
-handleAction IncreaseHeight = mapWindowSize id (+ step)
-handleAction DecreaseHeight = mapWindowSize id (subtract step)
+handleAction IncreaseWidth = mapWindowSize (+ 15) id
+handleAction DecreaseWidth = mapWindowSize (subtract 15) id
+handleAction IncreaseHeight = mapWindowSize id (+ 15)
+handleAction DecreaseHeight = mapWindowSize id (subtract 15)
 handleAction (Launch cmd) = io $ do
   _ <- runCommand cmd
   return ()

@@ -14,3 +14,6 @@ a .+ b = fi a + fi b
 (.-) :: (Integral a, Integral b, Num c) => a -> b -> c
 a .- b = fi a - fi b
   
+splits :: Int -> [a] -> [[a]]
+splits _ [] = []
+splits n xs = take n xs : splits n (drop n xs)

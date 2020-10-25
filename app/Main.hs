@@ -3,14 +3,12 @@ module Main where
 import Graphics.X11.Xlib
 import Graphics.X11.Xlib.Extras
 import qualified Data.Map as M
-import Data.Maybe
 import Data.Bits 
 import Control.Monad.State
 
-import Config
-import Utils
 import Types
 import Handlers
+import Config
 
 main :: IO ()
 main = do
@@ -21,7 +19,8 @@ main = do
   grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   forM_ (M.keys keys) $ \(a, b) -> 
     grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
-  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing [] False
+  color <- initColor dpy . borderColor =<< config
+  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing [] False color
 
 loop :: XEventPtr -> Xstate -> IO ()
 loop e s@Xstate{display=dpy}= do
