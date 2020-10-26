@@ -19,11 +19,7 @@ handle KeyEvent{ev_event_type = typ, ev_state = evstate, ev_keycode = code}
       handleAction (fromMaybe None (M.lookup (code, evstate) keys))
 
 handle ConfigureEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_window = window} = do
-  ws <- gets windows
-  client <- windowToClient window
-  case client of
-    Just w -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) ws}
-    Nothing -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : ws}
+  return ()
 
 handle MapRequestEvent{ev_window = window} = do
   dpy <- gets display
@@ -31,7 +27,6 @@ handle MapRequestEvent{ev_window = window} = do
   io $ do
     borderWidth <- borderWidth <$> config
     setWindowBorderWidth dpy window $ fi borderWidth
-    setWindowBorder dpy window bup
     mapWindow dpy window
   client <- windowToClient window
   case client of
@@ -42,6 +37,11 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
   dpy <- gets display
   let wc = WindowChanges x y width height border_width above detail
   io $ configureWindow dpy window value_mask wc
+  ws <- gets windows
+  client <- windowToClient window
+  case client of
+    Just w -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) ws}
+    Nothing -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : ws}
 
 handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
   | typ == buttonRelease = do
