@@ -19,38 +19,29 @@ windowToClient win = do
 
 mapWindowPos :: (Position -> Position) -> (Position -> Position) -> X ()
 mapWindowPos f g = do
-  client <- gets focused
-  case client of
-    Just c -> do
+  onJust (gets focused) $ \c -> do
       let x' = f $ c_x c
           y' = g $ c_y c
       dpy <- gets display
       io $ moveWindow dpy (c_window c) x' y' 
       modify $ \s -> s{focused=Just c{c_x=x', c_y=y'}}
-    Nothing -> return ()
 
 mapWindowSize :: (Dimension -> Dimension) -> (Dimension -> Dimension) -> X ()
 mapWindowSize f g = do
-  client <- gets focused
-  case client of
-    Just c -> do
+    onJust (gets focused) $ \c -> do
       let width = f $ c_width c
           height = g $ c_height c
       dpy <- gets display
       io $ resizeWindow dpy (c_window c) width height
       modify $ \s -> s{focused=Just c{c_width=width, c_height=height}}
-    Nothing -> return ()
 
 setFocus :: Client -> X ()
 setFocus client = do
-    foc <- gets focused
     bfp <- getColor borderFocusedColor
     bup <- getColor borderUnfocusedColor
     dpy <- gets display
+    onJust (gets focused) $ \c -> io $ setWindowBorder dpy (c_window c) bup
     io $ do
-      case foc of
-        Just c -> setWindowBorder dpy (c_window c) bup
-        Nothing -> return ()
       setInputFocus dpy (c_window client) revertToParent currentTime
       setWindowBorder dpy (c_window client) bfp
     modify $ \s -> s{focused=Just client}
@@ -107,3 +98,10 @@ getColor f = do
   colors <- gets colors
   res <- io $ f <$> config
   return $ fromMaybe 0 $ M.lookup res colors
+
+onJust :: (X (Maybe a)) -> (a -> X ()) -> X ()
+onJust x f = do
+  res <- x
+  case res of
+    Nothing -> return ()
+    Just a -> f a

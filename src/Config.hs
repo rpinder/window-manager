@@ -26,10 +26,9 @@ keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
 
 keysyms :: Display -> IO (M.Map (KeyCode, KeyMask) Action)
 keysyms dpy = do
-  let
-    f (a, b) = do
-      code <- keysymToKeycode dpy $ stringToKeysym a
-      return (code, b)
+  let f (a, b) = do
+        code <- keysymToKeycode dpy $ stringToKeysym a
+        return (code, b)
   m <- sequence $ M.map f keybindsmap
   return $ mapconvert m
   where

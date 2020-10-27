@@ -27,10 +27,7 @@ handle MapRequestEvent{ev_window = window} = do
     borderWidth <- borderWidth <$> config
     setWindowBorderWidth dpy window $ fi borderWidth
     mapWindow dpy window
-  client <- windowToClient window
-  case client of
-    Just c -> setFocus c
-    Nothing -> return ()
+  onJust (windowToClient window) $ \c -> setFocus c
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
   dpy <- gets display
@@ -44,33 +41,21 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
 
 handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
   | typ == buttonRelease = do
-      drag <- gets dragging
       dpy <- gets display
       io $ ungrabPointer dpy currentTime
-      case drag of
-        Just _ -> do
+      onJust (gets dragging) $ \_ -> do
           modify $ \s -> s{dragging=Nothing}
-          client <- windowToClient win
-          case client of
-            Just c -> modify $ \s -> s{focused=Just c}
-            Nothing -> return ()
-        Nothing -> return ()
+          onJust (windowToClient win) $ \c -> modify $ \s -> s{focused=Just c}
   | typ == buttonPress = do
-      client <- windowToClient win
-      case client of
-        Just c -> do
-          setFocus c
-          handleAction Raise
-          case but of
-            1 -> mouseMoveClient c
-            3 -> mouseResizeClient c
-        Nothing -> return ()
+      onJust (windowToClient win) $ \c -> do
+        setFocus c
+        handleAction Raise
+        case but of
+          1 -> mouseMoveClient c
+          3 -> mouseResizeClient c
 
 handle MotionEvent{ev_x = ex, ev_y = ey} = do
-  drag <- gets dragging
-  case drag of
-    Just f -> f (fromIntegral ex) (fromIntegral ey)
-    Nothing -> return ()
+  onJust (gets dragging) $ \f -> f (fromIntegral ex) (fromIntegral ey)
     
 handle _ = return ()
 
@@ -79,11 +64,7 @@ handleAction MoveLeft = mapWindowPos (subtract 15) id
 handleAction MoveDown = mapWindowPos id (+ 15)
 handleAction MoveUp = mapWindowPos id (subtract 15)
 handleAction MoveRight = mapWindowPos (+ 15) id
-handleAction Raise = do
-  client <- gets focused
-  case client of
-    Just c -> raiseClient c
-    Nothing -> return ()
+handleAction Raise = onJust (gets focused) $ \c -> raiseClient c
 handleAction IncreaseWidth = mapWindowSize (+ 15) id
 handleAction DecreaseWidth = mapWindowSize (subtract 15) id
 handleAction IncreaseHeight = mapWindowSize id (+ 15)
