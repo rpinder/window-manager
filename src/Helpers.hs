@@ -5,10 +5,12 @@ import Control.Monad.State
 import Data.List
 import Graphics.X11.Xlib.Extras
 import Data.Bits ((.|.))
-import Data.Maybe (isJust)
+import Data.Maybe
+import qualified Data.Map as M
 
 import Types
 import Utils
+import Config
 
 windowToClient :: Window -> X (Maybe Client)
 windowToClient win = do
@@ -42,8 +44,8 @@ mapWindowSize f g = do
 setFocus :: Client -> X ()
 setFocus client = do
     foc <- gets focused
-    bup <- gets borderUnfocusedPixel
-    bfp <- gets borderFocusedPixel
+    bfp <- getColor borderFocusedColor
+    bup <- getColor borderUnfocusedColor
     dpy <- gets display
     io $ do
       case foc of
@@ -93,3 +95,15 @@ mouseResizeClient client = do
   wa <- io $ getWindowAttributes dpy win
   mouseDrag (\ex ey -> io $ resizeWindow dpy win (wa_width wa .+ ex .- ox) (wa_height wa .+ ey .- oy))
 
+allocColors :: Display -> [Config -> String] -> IO (M.Map String Pixel)
+allocColors dpy fs = mconcat <$> res
+  where res = forM fs $ \f -> do
+          pix <- initColor dpy . f =<< config
+          cfg <- config
+          return $ M.singleton (f cfg) pix
+
+getColor :: (Config -> String) -> X Pixel
+getColor f = do
+  colors <- gets colors
+  res <- io $ f <$> config
+  return $ fromMaybe 0 $ M.lookup res colors

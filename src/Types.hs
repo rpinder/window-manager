@@ -14,8 +14,7 @@ data Xstate = Xstate
             , dragging :: !(Maybe (Position -> Position -> X ()))
             , windows :: ![Client]
             , quit :: Bool
-            , borderFocusedPixel :: Pixel
-            , borderUnfocusedPixel :: Pixel
+            , colors :: M.Map String Pixel
             }
 
 data Client = Client

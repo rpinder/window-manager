@@ -23,7 +23,6 @@ handle ConfigureEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, 
 
 handle MapRequestEvent{ev_window = window} = do
   dpy <- gets display
-  bup <- gets borderUnfocusedPixel
   io $ do
     borderWidth <- borderWidth <$> config
     setWindowBorderWidth dpy window $ fi borderWidth
