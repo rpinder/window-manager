@@ -36,8 +36,9 @@ data Action = MoveLeft
             | DecreaseHeight
             | Raise
             | Launch String
-            | None
             | Quit
+            | CloseWindow
+            | None
             deriving (Eq, Ord, Show)
 
 data Config = Config

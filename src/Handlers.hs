@@ -64,7 +64,7 @@ handleAction MoveLeft = mapWindowPos (subtract 15) id
 handleAction MoveDown = mapWindowPos id (+ 15)
 handleAction MoveUp = mapWindowPos id (subtract 15)
 handleAction MoveRight = mapWindowPos (+ 15) id
-handleAction Raise = onJust (gets focused) $ \c -> raiseClient c
+handleAction Raise = onJust (gets focused) raiseClient
 handleAction IncreaseWidth = mapWindowSize (+ 15) id
 handleAction DecreaseWidth = mapWindowSize (subtract 15) id
 handleAction IncreaseHeight = mapWindowSize id (+ 15)
@@ -73,5 +73,6 @@ handleAction (Launch cmd) = io $ do
   _ <- runCommand cmd
   return ()
 handleAction Quit = modify $ \s -> s{quit=True}
+handleAction CloseWindow = onJust (gets focused) closeClient
 handleAction _  = return ()
 

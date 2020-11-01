@@ -105,3 +105,19 @@ onJust x f = do
   case res of
     Nothing -> return ()
     Just a -> f a
+
+closeClient :: Client -> X ()
+closeClient c@Client{c_window=win} = do
+  dpy <- gets display
+  io $ allocaXEvent $ \ev -> do
+    protocols <- internAtom dpy "WM_PROTOCOLS" False
+    delete <- internAtom dpy "WM_DELETE_WINDOW" False
+    setEventType ev clientMessage
+    setClientMessageEvent ev win protocols 32 delete 0
+    sendEvent dpy win False noEventMask ev
+  ws <- gets windows
+  let ws' = filter (/= c) ws
+  modify $ \s -> s{windows=ws'}
+  case listToMaybe ws' of
+    Just c -> setFocus c
+    Nothing -> modify $ \s -> s{focused=Nothing}

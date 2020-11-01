@@ -21,6 +21,7 @@ keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
                       , (IncreaseWidth, ("l", mod1Mask .|. shiftMask))
                       , (Launch "dmenu_run", ("d", mod1Mask))
                       , (Raise, ("r", mod1Mask))
+                      , (CloseWindow, ("c", mod1Mask))
                       , (Quit, ("q", mod1Mask .|. shiftMask))
                       ]
 
