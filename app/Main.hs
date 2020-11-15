@@ -5,6 +5,7 @@ import Graphics.X11.Xlib.Extras
 import qualified Data.Map as M
 import Data.Bits 
 import Control.Monad.State
+import qualified Data.Vector as V
 
 import Types
 import Handlers
@@ -25,7 +26,7 @@ main = do
 
   colors <- allocColors dpy [borderFocusedColor, borderUnfocusedColor]
 
-  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing [] False colors
+  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing (V.fromList . take 10 $ repeat []) 0 False colors
 
 loop :: XEventPtr -> Xstate -> IO ()
 loop e s@Xstate{display=dpy}= do

@@ -3,6 +3,7 @@ module Types where
 import Control.Monad.State
 import Graphics.X11.Xlib
 import qualified Data.Map as M
+import qualified Data.Vector as V
 
 type X a = StateT Xstate IO a
 
@@ -12,7 +13,8 @@ data Xstate = Xstate
             , keybinds :: M.Map (KeyCode, KeyMask) Action
             , focused :: Maybe Client
             , dragging :: !(Maybe (Position -> Position -> X ()))
-            , windows :: ![Client]
+            , workspaces :: V.Vector [Client]
+            , current_ws :: Int
             , quit :: Bool
             , colors :: M.Map String Pixel
             }
@@ -38,6 +40,7 @@ data Action = MoveLeft
             | Launch String
             | Quit
             | CloseWindow
+            | SwitchToWorkspace Int
             | None
             deriving (Eq, Ord, Show)
 

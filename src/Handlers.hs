@@ -3,6 +3,7 @@ module Handlers where
 import Graphics.X11.Xlib
 import Graphics.X11.Xlib.Extras
 import qualified Data.Map as M
+import qualified Data.Vector as V
 import System.Process (runCommand)
 import Control.Monad.State
 import Data.Maybe (fromMaybe)
@@ -33,11 +34,12 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
   dpy <- gets display
   let wc = WindowChanges x y width height border_width above detail
   io $ configureWindow dpy window value_mask wc
-  ws <- gets windows
+  ws <- gets workspaces
+  cw <- gets current_ws
   client <- windowToClient window
   case client of
-    Just w -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) ws}
-    Nothing -> modify $ \s -> s{windows=(Client (fi x) (fi y) (fi width) (fi height) window) : ws}
+    Just w -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) (ws V.! cw))]}
+    Nothing -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : (ws V.! cw))]}
 
 handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
   | typ == buttonRelease = do
@@ -74,5 +76,6 @@ handleAction (Launch cmd) = io $ do
   return ()
 handleAction Quit = modify $ \s -> s{quit=True}
 handleAction CloseWindow = onJust (gets focused) closeClient
+handleAction (SwitchToWorkspace x) = switchToWorkspace x
 handleAction _  = return ()
 

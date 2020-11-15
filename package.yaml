@@ -25,6 +25,7 @@ dependencies:
 - containers
 - mtl
 - process
+- vector
 
 library:
   source-dirs: src

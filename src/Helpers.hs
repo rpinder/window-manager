@@ -7,6 +7,7 @@ import Graphics.X11.Xlib.Extras
 import Data.Bits ((.|.))
 import Data.Maybe
 import qualified Data.Map as M
+import qualified Data.Vector as V
 
 import Types
 import Utils
@@ -14,8 +15,9 @@ import Config
 
 windowToClient :: Window -> X (Maybe Client)
 windowToClient win = do
-  ws <- gets windows
-  return $ find (\c -> c_window c == win) ws
+  ws <- gets workspaces
+  cw <- gets current_ws
+  return $ find (\c -> c_window c == win) (ws V.! cw)
 
 mapWindowPos :: (Position -> Position) -> (Position -> Position) -> X ()
 mapWindowPos f g = do
@@ -106,6 +108,26 @@ onJust x f = do
     Nothing -> return ()
     Just a -> f a
 
+unmapClients :: X ()
+unmapClients = do
+  ws <- gets workspaces
+  cw <- gets current_ws
+  dpy <- gets display
+  io $ forM_ (ws V.! cw) $ \c -> do
+    unmapWindow dpy $ c_window c
+    
+switchToWorkspace :: Int -> X ()
+switchToWorkspace x = do
+  unmapClients
+  dpy <- gets display
+  ws <- gets workspaces
+  io $ forM_ (ws V.! x) $ \w -> do
+    mapWindow dpy $ c_window w
+  modify $ \s -> s{current_ws=x}
+  case listToMaybe (ws V.! x) of
+    Just c -> setFocus c
+    Nothing -> modify $ \s -> s{focused=Nothing}
+
 closeClient :: Client -> X ()
 closeClient c@Client{c_window=win} = do
   dpy <- gets display
@@ -115,9 +137,10 @@ closeClient c@Client{c_window=win} = do
     setEventType ev clientMessage
     setClientMessageEvent ev win protocols 32 delete 0
     sendEvent dpy win False noEventMask ev
-  ws <- gets windows
-  let ws' = filter (/= c) ws
-  modify $ \s -> s{windows=ws'}
+  ws_list <- gets workspaces
+  cw <- gets current_ws
+  let ws' = filter (/= c) (ws_list V.! cw)
+  modify $ \s -> s{workspaces=ws_list V.// [(cw, ws')] }
   case listToMaybe ws' of
     Just c -> setFocus c
     Nothing -> modify $ \s -> s{focused=Nothing}

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 17c3cd9ac8b4e4889ebb20978705c981ffcde0cce526eb9373dba1f39a74cfa9
+-- hash: 23966963ee5e760a080c1a9b0f3bbd9ff749b2e503b9526af79c15b87c54b7f8
 
 name:           rpwm
 version:        0.1.0.0
@@ -42,6 +42,7 @@ library
     , containers
     , mtl
     , process
+    , vector
   default-language: Haskell2010
 
 executable rpwm-exe
@@ -58,6 +59,7 @@ executable rpwm-exe
     , mtl
     , process
     , rpwm
+    , vector
   default-language: Haskell2010
 
 test-suite rpwm-test
@@ -75,4 +77,5 @@ test-suite rpwm-test
     , mtl
     , process
     , rpwm
+    , vector
   default-language: Haskell2010
