@@ -47,35 +47,33 @@ handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
       io $ ungrabPointer dpy currentTime
       onJust (gets dragging) $ \_ -> do
           modify $ \s -> s{dragging=Nothing}
-          onJust (windowToClient win) $ \c -> modify $ \s -> s{focused=Just c}
+          onJust (windowToClient win) setFocus
   | typ == buttonPress = do
       onJust (windowToClient win) $ \c -> do
-        setFocus c
-        handleAction Raise
         case but of
           1 -> mouseMoveClient c
           3 -> mouseResizeClient c
+        handleAction Raise
 
-handle MotionEvent{ev_x = ex, ev_y = ey} = do
-  onJust (gets dragging) $ \f -> f (fromIntegral ex) (fromIntegral ey)
+handle MotionEvent{ev_x = ex, ev_y = ey} = onJust (gets dragging) $ \f -> f (fromIntegral ex) (fromIntegral ey)
     
 handle _ = return ()
 
 handleAction :: Action -> X ()
-handleAction MoveLeft = mapWindowPos (subtract 15) id
-handleAction MoveDown = mapWindowPos id (+ 15)
-handleAction MoveUp = mapWindowPos id (subtract 15)
-handleAction MoveRight = mapWindowPos (+ 15) id
-handleAction Raise = onJust (gets focused) raiseClient
-handleAction IncreaseWidth = mapWindowSize (+ 15) id
-handleAction DecreaseWidth = mapWindowSize (subtract 15) id
-handleAction IncreaseHeight = mapWindowSize id (+ 15)
-handleAction DecreaseHeight = mapWindowSize id (subtract 15)
+handleAction MoveLeft = mapClientPos (subtract 15) id
+handleAction MoveDown = mapClientPos id (+ 15)
+handleAction MoveUp = mapClientPos id (subtract 15)
+handleAction MoveRight = mapClientPos (+ 15) id
+handleAction Raise = onJust focusedClient raiseClient
+handleAction IncreaseWidth = mapClientSize (+ 15) id
+handleAction DecreaseWidth = mapClientSize (subtract 15) id
+handleAction IncreaseHeight = mapClientSize id (+ 15)
+handleAction DecreaseHeight = mapClientSize id (subtract 15)
 handleAction (Launch cmd) = io $ do
   _ <- runCommand cmd
   return ()
 handleAction Quit = modify $ \s -> s{quit=True}
-handleAction CloseWindow = onJust (gets focused) closeClient
+handleAction CloseWindow = onJust focusedClient closeClient
 handleAction (SwitchToWorkspace x) = switchToWorkspace x
 handleAction _  = return ()
 

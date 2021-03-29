@@ -11,7 +11,7 @@ data Xstate = Xstate
             { display :: Display
             , root :: Window
             , keybinds :: M.Map (KeyCode, KeyMask) Action
-            , focused :: Maybe Client
+            , focused :: Maybe Int
             , dragging :: !(Maybe (Position -> Position -> X ()))
             , workspaces :: V.Vector [Client]
             , current_ws :: Int

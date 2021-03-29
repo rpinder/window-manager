@@ -19,34 +19,44 @@ windowToClient win = do
   cw <- gets current_ws
   return $ find (\c -> c_window c == win) (ws V.! cw)
 
-mapWindowPos :: (Position -> Position) -> (Position -> Position) -> X ()
-mapWindowPos f g = do
-  onJust (gets focused) $ \c -> do
+focusedClient :: X (Maybe Client)
+focusedClient = do
+  foc <- gets focused
+  case foc of
+    Just n -> do
+      ws <- gets workspaces
+      cw <- gets current_ws
+      return $ Just ((ws V.! cw) !! n)
+    Nothing -> return Nothing
+
+mapClientPos :: (Position -> Position) -> (Position -> Position) -> X ()
+mapClientPos f g = do
+  onJust focusedClient $ \c -> do
       let x' = f $ c_x c
           y' = g $ c_y c
-      dpy <- gets display
-      io $ moveWindow dpy (c_window c) x' y' 
-      modify $ \s -> s{focused=Just c{c_x=x', c_y=y'}}
+      moveClient c x' y' True
 
-mapWindowSize :: (Dimension -> Dimension) -> (Dimension -> Dimension) -> X ()
-mapWindowSize f g = do
-    onJust (gets focused) $ \c -> do
+mapClientSize :: (Dimension -> Dimension) -> (Dimension -> Dimension) -> X ()
+mapClientSize f g = do
+    onJust focusedClient $ \c -> do
       let width = f $ c_width c
           height = g $ c_height c
-      dpy <- gets display
-      io $ resizeWindow dpy (c_window c) width height
-      modify $ \s -> s{focused=Just c{c_width=width, c_height=height}}
+      resizeClient c width height True
 
 setFocus :: Client -> X ()
 setFocus client = do
     bfp <- getColor borderFocusedColor
     bup <- getColor borderUnfocusedColor
     dpy <- gets display
-    onJust (gets focused) $ \c -> io $ setWindowBorder dpy (c_window c) bup
+    onJust focusedClient $ \c -> io $ setWindowBorder dpy (c_window c) bup
     io $ do
       setInputFocus dpy (c_window client) revertToParent currentTime
       setWindowBorder dpy (c_window client) bfp
-    modify $ \s -> s{focused=Just client}
+    ws <- gets workspaces
+    cw <- gets current_ws
+    case findIndex (== client) (ws V.! cw) of
+      Just i -> modify $ \s -> s{focused=Just i}
+      Nothing -> return ()
 
 raiseClient :: Client -> X ()
 raiseClient client = do
@@ -72,13 +82,31 @@ mouseDrag f = do
       io $ grabPointer dpy root False (buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none currentTime
       modify $ \s -> s{dragging = Just (\x y -> clearEventsOfMask pointerMotionMask >> f x y)}
 
+moveClient :: Client -> Position -> Position -> Bool -> X ()
+moveClient c@Client{c_width=width, c_height=height, c_window=win} x y b = do
+  dpy <- gets display
+  ws <- gets workspaces
+  cw <- gets current_ws
+  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y width height win) : filter (/= c) (ws V.! cw))]}
+  io $ moveWindow dpy (c_window c) x y
+  when b $ setFocus $ ws V.! cw !! 0
+
+resizeClient :: Client -> Dimension -> Dimension -> Bool -> X ()
+resizeClient c@Client{c_x=x,c_y=y, c_window=win} w h b = do
+  dpy <- gets display
+  ws <- gets workspaces
+  cw <- gets current_ws
+  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y w h win) : filter (/= c) (ws V.! cw))]}
+  io $ resizeWindow dpy (c_window c) w h
+  when b $ setFocus $ ws V.! cw !! 0
+
 mouseMoveClient :: Client -> X ()
 mouseMoveClient client = do
   let win = c_window client
   dpy <- gets display
   (_, _, _, ox, oy, _, _, _) <- io $ queryPointer dpy win
   wa <- io $ getWindowAttributes dpy win
-  mouseDrag (\ex ey -> io $ moveWindow dpy win (wa_x wa .+ ex .- fi ox) (wa_y wa .+ ey .- fi oy))
+  mouseDrag (\ex ey -> moveClient client (wa_x wa .+ ex .- fi ox) (wa_y wa .+ ey .- fi oy) True)
 
 mouseResizeClient :: Client -> X ()
 mouseResizeClient client = do
@@ -86,7 +114,7 @@ mouseResizeClient client = do
   dpy <- gets display
   (_, _, _, ox, oy, _, _, _) <- io $ queryPointer dpy win
   wa <- io $ getWindowAttributes dpy win
-  mouseDrag (\ex ey -> io $ resizeWindow dpy win (wa_width wa .+ ex .- ox) (wa_height wa .+ ey .- oy))
+  mouseDrag (\ex ey -> resizeClient client (wa_width wa .+ ex .- ox) (wa_height wa .+ ey .- oy) True)
 
 allocColors :: Display -> [Config -> String] -> IO (M.Map String Pixel)
 allocColors dpy fs = mconcat <$> res
@@ -125,7 +153,7 @@ switchToWorkspace x = do
     mapWindow dpy $ c_window w
   modify $ \s -> s{current_ws=x}
   case listToMaybe (ws V.! x) of
-    Just c -> setFocus c
+    Just _ -> modify $ \s -> s{focused=Just 0}
     Nothing -> modify $ \s -> s{focused=Nothing}
 
 closeClient :: Client -> X ()
