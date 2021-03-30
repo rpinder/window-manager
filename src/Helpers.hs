@@ -149,12 +149,20 @@ switchToWorkspace x = do
   unmapClients
   dpy <- gets display
   ws <- gets workspaces
-  io $ forM_ (ws V.! x) $ \w -> do
-    mapWindow dpy $ c_window w
+  rt <- gets root
+  io $ do
+    ewmhSetCurrentDesktop dpy rt x
+    forM_ (ws V.! x) $ \w -> do
+      mapWindow dpy $ c_window w
   modify $ \s -> s{current_ws=x}
   case listToMaybe (ws V.! x) of
     Just _ -> modify $ \s -> s{focused=Just 0}
     Nothing -> modify $ \s -> s{focused=Nothing}
+
+ewmhSetCurrentDesktop :: Display -> Window -> Int -> IO ()
+ewmhSetCurrentDesktop dpy rt x = do
+    current_desktop_atom <- internAtom dpy "_NET_CURRENT_DESKTOP" False
+    changeProperty32 dpy rt current_desktop_atom current_desktop_atom propModeReplace [fromIntegral x, fromIntegral none]
 
 closeClient :: Client -> X ()
 closeClient c@Client{c_window=win} = do

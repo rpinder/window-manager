@@ -26,7 +26,11 @@ main = do
 
   colors <- allocColors dpy [borderFocusedColor, borderUnfocusedColor]
 
-  allocaXEvent $ \e -> loop e $ Xstate dpy (defaultRootWindow dpy) keys Nothing Nothing (V.fromList . take 10 $ repeat []) 0 False colors
+  let root = defaultRootWindow dpy
+
+  ewmhSetCurrentDesktop dpy root 0
+
+  allocaXEvent $ \e -> loop e $ Xstate dpy root keys Nothing Nothing (V.fromList . take 10 $ repeat []) 0 False colors
 
 loop :: XEventPtr -> Xstate -> IO ()
 loop e s@Xstate{display=dpy}= do
