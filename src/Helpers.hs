@@ -87,7 +87,7 @@ moveClient c@Client{c_width=width, c_height=height, c_window=win} x y b = do
   dpy <- gets display
   ws <- gets workspaces
   cw <- gets current_ws
-  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y width height win) : filter (/= c) (ws V.! cw))]}
+  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y width height win) : filter (\c -> c_window c /= win) (ws V.! cw))]}
   io $ moveWindow dpy (c_window c) x y
   when b $ setFocus $ ws V.! cw !! 0
 
@@ -96,8 +96,8 @@ resizeClient c@Client{c_x=x,c_y=y, c_window=win} w h b = do
   dpy <- gets display
   ws <- gets workspaces
   cw <- gets current_ws
-  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y w h win) : filter (/= c) (ws V.! cw))]}
-  io $ resizeWindow dpy (c_window c) w h
+  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y w h win) : filter (\c -> c_window c /= win) (ws V.! cw))]}
+  io $ resizeWindow dpy win w h
   when b $ setFocus $ ws V.! cw !! 0
 
 mouseMoveClient :: Client -> X ()
@@ -146,9 +146,9 @@ unmapClients = do
     
 switchToWorkspace :: Int -> X ()
 switchToWorkspace x = do
+  ws <- gets workspaces
   unmapClients
   dpy <- gets display
-  ws <- gets workspaces
   rt <- gets root
   io $ do
     ewmhSetCurrentDesktop dpy rt x
