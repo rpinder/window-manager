@@ -162,7 +162,8 @@ switchToWorkspace x = do
 ewmhSetCurrentDesktop :: Display -> Window -> Int -> IO ()
 ewmhSetCurrentDesktop dpy rt x = do
     current_desktop_atom <- internAtom dpy "_NET_CURRENT_DESKTOP" False
-    changeProperty32 dpy rt current_desktop_atom current_desktop_atom propModeReplace [fromIntegral x, fromIntegral none]
+    cardinal <- internAtom dpy "CARDINAL" False
+    changeProperty32 dpy rt current_desktop_atom cardinal propModeReplace [fromIntegral x]
 
 closeClient :: Client -> X ()
 closeClient c@Client{c_window=win} = do
