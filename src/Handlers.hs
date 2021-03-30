@@ -6,6 +6,7 @@ import qualified Data.Map as M
 import qualified Data.Vector as V
 import System.Process (runCommand)
 import Control.Monad.State
+import Control.Monad
 import Data.Maybe (fromMaybe)
 
 import Types
@@ -34,12 +35,23 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
   dpy <- gets display
   let wc = WindowChanges x y width height border_width above detail
   io $ configureWindow dpy window value_mask wc
-  ws <- gets workspaces
-  cw <- gets current_ws
-  client <- windowToClient window
-  case client of
-    Just w -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) (ws V.! cw))]}
-    Nothing -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : (ws V.! cw))]}
+  res <- isdock dpy
+  unless res $ do
+    ws <- gets workspaces
+    cw <- gets current_ws
+    client <- windowToClient window
+    case client of
+      Just w -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) (ws V.! cw))]}
+      Nothing -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : (ws V.! cw))]}
+  where
+    isdock dpy = io $ do
+      net_wm_window_type <- internAtom dpy "_NET_WM_WINDOW_TYPE" False
+      net_wm_window_type_dock <- internAtom dpy "_NET_WM_WINDOW_TYPE_DOCK" False
+      res <- getWindowProperty32 dpy net_wm_window_type window
+      case res of
+        Nothing -> return False
+        Just v -> return $ v!!0 == fromIntegral net_wm_window_type_dock
+
 
 handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
   | typ == buttonRelease = do
