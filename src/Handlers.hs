@@ -25,10 +25,7 @@ handle ConfigureEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, 
 
 handle MapRequestEvent{ev_window = window} = do
   dpy <- gets display
-  io $ do
-    borderWidth <- borderWidth <$> config
-    setWindowBorderWidth dpy window $ fi borderWidth
-    mapWindow dpy window
+  io $ mapWindow dpy window
   onJust (windowToClient window) $ \c -> setFocus c
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
@@ -37,6 +34,9 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
   io $ configureWindow dpy window value_mask wc
   res <- isdock dpy
   unless res $ do
+    io $ do
+      borderWidth <- borderWidth <$> config
+      setWindowBorderWidth dpy window $ fi borderWidth
     ws <- gets workspaces
     cw <- gets current_ws
     client <- windowToClient window
