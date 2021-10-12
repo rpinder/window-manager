@@ -9,6 +9,9 @@ import Data.Word
 
 import Types
 import Utils
+import Parser
+import qualified Data.Text as T
+import Data.Either (rights, lefts)
 
 keybindsmap :: M.Map Action (String, KeyMask)
 keybindsmap = M.fromList [ (MoveLeft, ("h", mod1Mask))
@@ -41,15 +44,12 @@ keysyms dpy = do
         return (code, b)
   m <- sequence $ M.map f keybindsmap
   return $ mapconvert m
-  where
-    mapconvert :: Ord a => M.Map k a -> M.Map a k
-    mapconvert = M.fromList . map swap . M.toList
+
+mapconvert :: Ord a => M.Map k a -> M.Map a k
+mapconvert = M.fromList . map swap . M.toList
 
 step :: Num a => a
 step = 15
-
-config :: IO Config
-config = return $ Config 5 "efdfbb" "2f2c25" 15
 
 stringToColor :: String -> (Word16, Word16, Word16)
 stringToColor = tuple . map (*257) . map (fst . (!!0). readHex) . splits 2
@@ -61,3 +61,22 @@ initColor dpy color = do
   let (r,g,b) = stringToColor color
   xcolor <- allocColor dpy colormap $ Color 0 r g b $ doRed .|. doGreen .|. doBlue
   return $ color_pixel xcolor
+
+readConfig :: FilePath -> IO Config
+readConfig f = do
+  file <- lines <$> readFile f
+  let commands =  rights $ map (parseLine f) file
+  return $ Config (combineKeybinds $ keybinds commands)
+                  (combineSettings $ settings commands)
+  where
+    settings xs = [a | S a <- xs]
+    keybinds xs = [a | K a <- xs]
+
+combineKeybinds :: [Keybind] -> M.Map (String, KeyMask) Action
+combineKeybinds = mconcat <$> map convertKeybind
+  where convertKey (Key t km) = (T.unpack t, km)
+        convertKeybind (Keybind k a) = M.singleton (convertKey k) a
+
+combineSettings :: [Setting] -> M.Map COptions ResultValue
+combineSettings = mconcat <$> map convertSetting
+  where convertSetting (Setting copt rv) = M.singleton copt rv

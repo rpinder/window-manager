@@ -123,7 +123,7 @@ allocColors dpy fs = mconcat <$> res
           cfg <- config
           return $ M.singleton (f cfg) pix
 
-getColor :: (Config -> String) -> X Pixel
+getColor :: ColorOption -> X Pixel
 getColor f = do
   colors <- gets colors
   res <- io $ f <$> config

@@ -4,6 +4,7 @@ import Control.Monad.State
 import Graphics.X11.Xlib
 import qualified Data.Map as M
 import qualified Data.Vector as V
+import Data.Text
 
 type X a = StateT Xstate IO a
 
@@ -45,8 +46,21 @@ data Action = MoveLeft
             deriving (Eq, Ord, Show)
 
 data Config = Config
-              { borderWidth :: Int
-              , borderFocusedColor :: String
-              , borderUnfocusedColor :: String
-              , step :: Int
-              }
+              { _keybinds :: M.Map (String, KeyMask) Action
+              , _settings :: M.Map COptions ResultValue
+              } deriving (Eq, Show)
+
+data COptions
+  = CColor ColorOption
+  | Step
+  | BorderWidth
+  deriving (Eq, Show, Ord)
+
+data ColorOption = BorderFocused | BorderUnfocused
+  deriving (Eq, Show, Ord)
+
+cOptionsMap :: M.Map COptions ResultValue
+cOptionsMap = undefined
+
+data ResultValue = Number Int | Colour Text
+  deriving (Eq, Show)

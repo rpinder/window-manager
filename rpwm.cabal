@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 23966963ee5e760a080c1a9b0f3bbd9ff749b2e503b9526af79c15b87c54b7f8
+-- hash: bae64483feb0ae7488cfe7c64af29549431f9787810a393433ef7d6f63623389
 
 name:           rpwm
 version:        0.1.0.0
@@ -30,6 +30,7 @@ library
       Config
       Handlers
       Helpers
+      Parser
       Types
       Utils
   other-modules:
@@ -40,8 +41,10 @@ library
       X11
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , mtl
     , process
+    , text
     , vector
   default-language: Haskell2010
 
@@ -56,9 +59,11 @@ executable rpwm-exe
       X11
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , mtl
     , process
     , rpwm
+    , text
     , vector
   default-language: Haskell2010
 
@@ -74,8 +79,10 @@ test-suite rpwm-test
       X11
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , mtl
     , process
     , rpwm
+    , text
     , vector
   default-language: Haskell2010

@@ -26,6 +26,8 @@ dependencies:
 - mtl
 - process
 - vector
+- megaparsec
+- text
 
 library:
   source-dirs: src
