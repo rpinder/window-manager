@@ -15,22 +15,23 @@ import Config
 main :: IO ()
 main = do
   dpy <- openDisplay ""
-  keys <- keysyms dpy
   selectInput dpy (defaultRootWindow dpy) $ substructureRedirectMask .|. substructureNotifyMask
 
   grabButton dpy 1 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
 
-  forM_ (M.keys keys) $ \(a, b) -> 
-    grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
+  cfg <- readConfig "configrc"
+  cmap <- settingsToColormap dpy $ _settings cfg
+  keybindings <- stringToKeyCode dpy $ _keybinds cfg
 
-  colors <- allocColors dpy [borderFocusedColor, borderUnfocusedColor]
+  forM_ (M.keys keybindings) $ \(a, b) -> 
+    grabKey dpy a b (defaultRootWindow dpy) True grabModeAsync grabModeAsync
 
   let root = defaultRootWindow dpy
 
   ewmhSetCurrentDesktop dpy root 0
 
-  allocaXEvent $ \e -> loop e $ Xstate dpy root keys Nothing Nothing (V.fromList . take 10 $ repeat []) 0 False colors
+  allocaXEvent $ \e -> loop e $ Xstate dpy root keybindings (_settings cfg) Nothing Nothing (V.fromList . take 10 $ repeat []) 0 False cmap
 
 loop :: XEventPtr -> Xstate -> IO ()
 loop e s@Xstate{display=dpy}= do

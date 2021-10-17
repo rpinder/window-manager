@@ -30,12 +30,13 @@ handle MapRequestEvent{ev_window = window} = do
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
   dpy <- gets display
+  sets <- gets settings
   let wc = WindowChanges x y width height border_width above detail
   io $ configureWindow dpy window value_mask wc
   res <- isdock dpy
   unless res $ do
     io $ do
-      borderWidth <- borderWidth <$> config
+      let Just (Number borderWidth) = M.lookup BorderWidth sets
       setWindowBorderWidth dpy window $ fi borderWidth
     ws <- gets workspaces
     cw <- gets current_ws

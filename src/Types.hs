@@ -12,12 +12,13 @@ data Xstate = Xstate
             { display :: Display
             , root :: Window
             , keybinds :: M.Map (KeyCode, KeyMask) Action
+            , settings :: M.Map COptions ResultValue
             , focused :: Maybe Int
             , dragging :: !(Maybe (Position -> Position -> X ()))
             , workspaces :: V.Vector [Client]
             , current_ws :: Int
             , quit :: Bool
-            , colors :: M.Map String Pixel
+            , colors :: M.Map ColorOption Pixel
             }
 
 data Client = Client
@@ -50,6 +51,9 @@ data Config = Config
               , _settings :: M.Map COptions ResultValue
               } deriving (Eq, Show)
 
+
+
+-- go through Coloroptions and have map of ColorOption to Pixel
 data COptions
   = CColor ColorOption
   | Step
@@ -58,9 +62,6 @@ data COptions
 
 data ColorOption = BorderFocused | BorderUnfocused
   deriving (Eq, Show, Ord)
-
-cOptionsMap :: M.Map COptions ResultValue
-cOptionsMap = undefined
 
 data ResultValue = Number Int | Colour Text
   deriving (Eq, Show)

@@ -8,6 +8,7 @@ import Data.Bits ((.|.))
 import Data.Maybe
 import qualified Data.Map as M
 import qualified Data.Vector as V
+import qualified Data.Text as T
 
 import Types
 import Utils
@@ -45,8 +46,8 @@ mapClientSize f g = do
 
 setFocus :: Client -> X ()
 setFocus client = do
-    bfp <- getColor borderFocusedColor
-    bup <- getColor borderUnfocusedColor
+    bfp <- getColor BorderFocused
+    bup <- getColor BorderUnfocused
     dpy <- gets display
     onJust focusedClient $ \c -> io $ setWindowBorder dpy (c_window c) bup
     io $ do
@@ -116,18 +117,17 @@ mouseResizeClient client = do
   wa <- io $ getWindowAttributes dpy win
   mouseDrag (\ex ey -> resizeClient client (wa_width wa .+ ex .- ox) (wa_height wa .+ ey .- oy) True)
 
-allocColors :: Display -> [Config -> String] -> IO (M.Map String Pixel)
-allocColors dpy fs = mconcat <$> res
-  where res = forM fs $ \f -> do
-          pix <- initColor dpy . f =<< config
-          cfg <- config
-          return $ M.singleton (f cfg) pix
+-- allocColors :: Display -> [Config -> String] -> IO (M.Map String Pixel)
+-- allocColors dpy fs = mconcat <$> res
+--   where res = forM fs $ \f -> do
+--           pix <- initColor dpy . f =<< config
+--           cfg <- config
+--           return $ M.singleton (f cfg) pix
 
 getColor :: ColorOption -> X Pixel
-getColor f = do
+getColor co = do
   colors <- gets colors
-  res <- io $ f <$> config
-  return $ fromMaybe 0 $ M.lookup res colors
+  return $ fromMaybe 0 $ M.lookup co colors
 
 onJust :: (X (Maybe a)) -> (a -> X ()) -> X ()
 onJust x f = do
@@ -181,3 +181,11 @@ closeClient c@Client{c_window=win} = do
   case listToMaybe ws' of
     Just c -> setFocus c
     Nothing -> modify $ \s -> s{focused=Nothing}
+
+settingsToColormap :: Display -> M.Map COptions ResultValue -> IO (M.Map ColorOption Pixel)
+settingsToColormap dpy = M.foldrWithKey f (pure M.empty)
+  where f (CColor co) (Colour str) b = do
+          pix <- initColor dpy (T.unpack str)
+          b' <- b
+          return $ M.insert co pix b'
+        f _ _ b = b

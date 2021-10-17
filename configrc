@@ -1,21 +1,21 @@
 # For future reference, not used at all
 
-S-Ret | Launch "alacritty"
-S-d | Launch "dmenu"
+S-Return | Launch "alacritty"
+S-d | Launch "rofi -show run"
 
 S-h | MoveLeft
 S-j | MoveDown
 S-k | MoveUp
 S-l | MoveRight
 
-S-s-h | DecreaseWidth
-S-s-j | IncreaseHeight
-S-s-k | DecreaseHeight
-S-s-l | IncreaseWidth
+Ss-h | DecreaseWidth
+Ss-j | IncreaseHeight
+Ss-k | DecreaseHeight
+Ss-l | IncreaseWidth
 
 S-r | Raise
 S-c | Close
-S-s-q | Quit
+Ss-q | Quit
 
 S-1 | Workspace 1
 S-2 | Workspace 2
@@ -30,5 +30,5 @@ S-9 | Workspace 9
 step = 15
 borderWidth = 5
 
-borderFocused = #efdfbb
+borderFocused = #ff0000
 borderUnfocused = #2f2c25

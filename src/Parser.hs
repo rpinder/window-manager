@@ -59,8 +59,8 @@ pKeys :: Parser Key
 pKeys = do
   c <- some $ char 'S' <|> char 'C' <|> char 'A' <|> char 's'
   void (symbol "-")
-  l <- lexeme alphaNumChar
-  return $ Key (T.singleton l) (combineKeyMasks c)
+  l <- lexeme $ some alphaNumChar
+  return $ Key (T.pack l) (combineKeyMasks c)
   where combineKeyMasks :: String -> KeyMask
         combineKeyMasks = foldr1 (.|.) . map charToKeyMask
 
@@ -86,9 +86,12 @@ pActionInput p s a = do
   void (symbol $ T.pack s)
   cmd <- p <?> s ++ "Command"
   return $ a cmd
+
+stringLiteral :: Parser String
+stringLiteral = char '\"' *> manyTill L.charLiteral (char '\"')
  
 pActionCmd :: String -> (String -> Action) -> Parser Action
-pActionCmd = pActionInput $ some alphaNumChar
+pActionCmd = pActionInput stringLiteral
 
 pActionNumber :: String -> (Int -> Action) -> Parser Action
 pActionNumber = pActionInput integer
@@ -113,5 +116,5 @@ pCOption :: Parser COptions
 pCOption = choice
   [ BorderWidth            <$ symbol "borderWidth"
   , CColor BorderFocused   <$ symbol "borderFocused"
-  , CColor BorderUnfocused <$ symbol "borderUnfocued"
+  , CColor BorderUnfocused <$ symbol "borderUnfocused"
   , Step                   <$ symbol "step" ]
