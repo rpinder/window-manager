@@ -31,7 +31,7 @@ main = do
 
   ewmhSetCurrentDesktop dpy root 0
 
-  allocaXEvent $ \e -> loop e $ Xstate dpy root keybindings (_settings cfg) Nothing Nothing (V.fromList . take 10 $ repeat []) 0 False cmap
+  allocaXEvent $ \e -> loop e $ Xstate dpy root keybindings (_settings cfg) Nothing Nothing (V.fromList . take 10 $ repeat []) 1 False cmap
 
 loop :: XEventPtr -> Xstate -> IO ()
 loop e s@Xstate{display=dpy}= do
