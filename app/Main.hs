@@ -29,7 +29,7 @@ main = do
 
   let root = defaultRootWindow dpy
 
-  ewmhSetCurrentDesktop dpy root 0
+  ewmhSetCurrentDesktop dpy root 1
 
   allocaXEvent $ \e -> loop e $ Xstate dpy root keybindings (_settings cfg) Nothing Nothing (V.fromList . take 10 $ repeat []) 1 False cmap
 
