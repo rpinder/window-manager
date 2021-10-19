@@ -6,6 +6,8 @@ import qualified Data.Map as M
 import Data.Bits 
 import Control.Monad.State
 import qualified Data.Vector as V
+import System.Environment
+import System.Exit
 
 import Types
 import Handlers
@@ -20,7 +22,9 @@ main = do
   grabButton dpy 1 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
   grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
 
-  cfg <- readConfig "configrc"
+  args <- getArgs
+  when (null args) (exitFailure)
+  cfg <- readConfig $ head args
   cmap <- settingsToColormap dpy $ _settings cfg
   keybindings <- stringToKeyCode dpy $ _keybinds cfg
 
