@@ -42,6 +42,7 @@ data Action = MoveLeft
             | Launch String
             | Quit
             | CloseWindow
+            | Maximize
             | SwitchToWorkspace Int
             | None
             deriving (Eq, Ord, Show)

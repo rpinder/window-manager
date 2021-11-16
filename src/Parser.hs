@@ -107,6 +107,7 @@ pAction = choice
   , IncreaseHeight <$ symbol "IncreaseHeight"
   , DecreaseHeight <$ symbol "DecreaseHeight"
   , Raise <$ symbol "Raise"
+  , Maximize <$ symbol "Maximize"
   , Quit <$ symbol "Quit"
   , CloseWindow <$ symbol "Close"
   , pActionCmd "Launch" Launch

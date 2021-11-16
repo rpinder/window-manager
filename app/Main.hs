@@ -23,7 +23,7 @@ main = do
   grabButton dpy 3 mod1Mask (defaultRootWindow dpy) True (buttonPressMask .|. buttonReleaseMask .|. pointerMotionMask) grabModeAsync grabModeAsync none none
 
   args <- getArgs
-  when (null args) (exitFailure)
+  when (null args) (putStrLn "Please provide config file as argument" >> exitFailure)
   cfg <- readConfig $ head args
   cmap <- settingsToColormap dpy $ _settings cfg
   keybindings <- stringToKeyCode dpy $ _keybinds cfg

@@ -18,7 +18,7 @@ windowToClient :: Window -> X (Maybe Client)
 windowToClient win = do
   ws <- gets workspaces
   cw <- gets current_ws
-  return $ find (\c -> c_window c == win) (ws V.! cw)
+  return $ find (\c -> c_window c == win) (ws V.! (cw - 1))
 
 focusedClient :: X (Maybe Client)
 focusedClient = do
@@ -27,7 +27,7 @@ focusedClient = do
     Just n -> do
       ws <- gets workspaces
       cw <- gets current_ws
-      return $ Just ((ws V.! cw) !! n)
+      return $ Just ((ws V.! (cw - 1)) !! n)
     Nothing -> return Nothing
 
 mapClientPos :: (Position -> Position) -> (Position -> Position) -> X ()
@@ -44,18 +44,22 @@ mapClientSize f g = do
           height = g $ c_height c
       resizeClient c width height True
 
+unFocus :: X ()
+unFocus = do
+  dpy <- gets display
+  bup <- getColor BorderUnfocused
+  onJust focusedClient $ \c -> io $ setWindowBorder dpy (c_window c) bup
+
 setFocus :: Client -> X ()
 setFocus client = do
     bfp <- getColor BorderFocused
-    bup <- getColor BorderUnfocused
     dpy <- gets display
-    onJust focusedClient $ \c -> io $ setWindowBorder dpy (c_window c) bup
     io $ do
       setInputFocus dpy (c_window client) revertToParent currentTime
       setWindowBorder dpy (c_window client) bfp
     ws <- gets workspaces
     cw <- gets current_ws
-    case findIndex (== client) (ws V.! cw) of
+    case findIndex (== client) (ws V.! (cw - 1)) of
       Just i -> modify $ \s -> s{focused=Just i}
       Nothing -> return ()
 
@@ -63,6 +67,16 @@ raiseClient :: Client -> X ()
 raiseClient client = do
   dpy <- gets display
   liftIO $ raiseWindow dpy $ c_window client
+
+maximizeClient :: Client -> X ()
+maximizeClient client = do
+  dpy <- gets display
+  moveClient client 0 0 False
+  attr <- io $ getWindowAttributes dpy $ defaultRootWindow dpy
+  let width = fi $ wa_width attr
+  let height = fi $ wa_height attr
+  resizeClient client width height True
+
 
 clearEventsOfMask :: EventMask -> X ()
 clearEventsOfMask mask = do
@@ -88,18 +102,18 @@ moveClient c@Client{c_width=width, c_height=height, c_window=win} x y b = do
   dpy <- gets display
   ws <- gets workspaces
   cw <- gets current_ws
-  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y width height win) : filter (\c -> c_window c /= win) (ws V.! cw))]}
+  modify $ \s -> s{workspaces = ws V.// [(cw-1, (Client x y width height win) : filter (\c -> c_window c /= win) (ws V.! (cw - 1)))]}
   io $ moveWindow dpy (c_window c) x y
-  when b $ setFocus $ ws V.! cw !! 0
+  when b $ setFocus $ ws V.! (cw - 1) !! 0
 
 resizeClient :: Client -> Dimension -> Dimension -> Bool -> X ()
 resizeClient c@Client{c_x=x,c_y=y, c_window=win} w h b = do
   dpy <- gets display
   ws <- gets workspaces
   cw <- gets current_ws
-  modify $ \s -> s{workspaces = ws V.// [(cw, (Client x y w h win) : filter (\c -> c_window c /= win) (ws V.! cw))]}
+  modify $ \s -> s{workspaces = ws V.// [(cw-1, (Client x y w h win) : filter (\c -> c_window c /= win) (ws V.! (cw - 1)))]}
   io $ resizeWindow dpy win w h
-  when b $ setFocus $ ws V.! cw !! 0
+  when b $ setFocus $ ws V.! (cw - 1) !! 0
 
 mouseMoveClient :: Client -> X ()
 mouseMoveClient client = do
@@ -141,22 +155,25 @@ unmapClients = do
   ws <- gets workspaces
   cw <- gets current_ws
   dpy <- gets display
-  io $ forM_ (ws V.! cw) $ \c -> do
+  io $ forM_ (ws V.! (cw - 1)) $ \c -> do
     unmapWindow dpy $ c_window c
     
 switchToWorkspace :: Int -> X ()
 switchToWorkspace x = do
+  bup <- getColor BorderUnfocused
+  dpy <- gets display
+  onJust focusedClient $ \c -> io $ setWindowBorder dpy (c_window c) bup
   ws <- gets workspaces
   unmapClients
   dpy <- gets display
   rt <- gets root
   io $ do
     ewmhSetCurrentDesktop dpy rt x
-    forM_ (ws V.! x) $ \w -> do
+    forM_ (ws V.! (x-1)) $ \w -> do
       mapWindow dpy $ c_window w
   modify $ \s -> s{current_ws=x}
-  case listToMaybe (ws V.! x) of
-    Just _ -> modify $ \s -> s{focused=Just 0}
+  case listToMaybe (ws V.! (x-1)) of
+    Just win -> setFocus win
     Nothing -> modify $ \s -> s{focused=Nothing}
 
 ewmhSetCurrentDesktop :: Display -> Window -> Int -> IO ()
@@ -176,8 +193,8 @@ closeClient c@Client{c_window=win} = do
     sendEvent dpy win False noEventMask ev
   ws_list <- gets workspaces
   cw <- gets current_ws
-  let ws' = filter (/= c) (ws_list V.! cw)
-  modify $ \s -> s{workspaces=ws_list V.// [(cw, ws')] }
+  let ws' = filter (/= c) (ws_list V.! (cw - 1))
+  modify $ \s -> s{workspaces=ws_list V.// [(cw-1, ws')] }
   case listToMaybe ws' of
     Just c -> setFocus c
     Nothing -> modify $ \s -> s{focused=Nothing}

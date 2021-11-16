@@ -7,7 +7,8 @@ import qualified Data.Vector as V
 import System.Process (runCommand)
 import Control.Monad.State
 import Control.Monad
-import Data.Maybe (fromMaybe)
+import Data.Maybe
+import Data.List
 
 import Types
 import Utils
@@ -24,11 +25,13 @@ handle ConfigureEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, 
   return ()
 
 handle MapRequestEvent{ev_window = window} = do
+  unFocus
   dpy <- gets display
   io $ mapWindow dpy window
   onJust (windowToClient window) $ \c -> setFocus c
 
 handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = height, ev_border_width = border_width, ev_above = above, ev_detail = detail, ev_window = window, ev_value_mask = value_mask} = do
+  unFocus
   dpy <- gets display
   sets <- gets settings
   let wc = WindowChanges x y width height border_width above detail
@@ -42,8 +45,8 @@ handle ConfigureRequestEvent{ev_x = x, ev_y = y, ev_width = width, ev_height = h
     cw <- gets current_ws
     client <- windowToClient window
     case client of
-      Just w -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) (ws V.! cw))]}
-      Nothing -> modify $ \s -> s{workspaces= ws V.// [(cw, (Client (fi x) (fi y) (fi width) (fi height) window) : (ws V.! cw))]}
+      Just w -> modify $ \s -> s{workspaces= ws V.// [(cw-1, (Client (fi x) (fi y) (fi width) (fi height) window) : filter (/= w) (ws V.! (cw-1)))]}
+      Nothing -> modify $ \s -> s{workspaces= ws V.// [(cw-1, (Client (fi x) (fi y) (fi width) (fi height) window) : (ws V.! (cw-1)))]}
   where
     isdock dpy = io $ do
       net_wm_window_type <- internAtom dpy "_NET_WM_WINDOW_TYPE" False
@@ -60,7 +63,7 @@ handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
       io $ ungrabPointer dpy currentTime
       onJust (gets dragging) $ \_ -> do
           modify $ \s -> s{dragging=Nothing}
-          onJust (windowToClient win) setFocus
+          onJust (windowToClient win) $ \x -> unFocus >> setFocus x
   | typ == buttonPress = do
       onJust (windowToClient win) $ \c -> do
         case but of
@@ -69,7 +72,22 @@ handle ButtonEvent{ev_event_type = typ, ev_subwindow = win, ev_button = but}
         handleAction Raise
 
 handle MotionEvent{ev_x = ex, ev_y = ey} = onJust (gets dragging) $ \f -> f (fromIntegral ex) (fromIntegral ey)
-    
+
+handle DestroyWindowEvent{ev_window = win} = do
+  onJust (windowToClient win) $ \c -> do
+    onJust focusedClient $ \fc -> do
+      cw <- gets current_ws
+      ws <- gets workspaces
+      modify $ \s -> s{workspaces = ws V.// [(cw - 1, filter (/= c) (ws V.! (cw - 1)))]}
+      ws' <- gets workspaces
+      if fc == c
+        then case listToMaybe (ws' V.! (cw-1)) of
+               Just cl -> setFocus cl
+               Nothing -> modify $ \s -> s{focused=Nothing}
+        else case findIndex (== fc) (ws' V.! (cw - 1)) of
+               Just i -> setFocus $ (ws' V.! (cw - 1)) !! i
+               Nothing -> return ()
+
 handle _ = return ()
 
 handleAction :: Action -> X ()
@@ -88,5 +106,6 @@ handleAction (Launch cmd) = io $ do
 handleAction Quit = modify $ \s -> s{quit=True}
 handleAction CloseWindow = onJust focusedClient closeClient
 handleAction (SwitchToWorkspace x) = switchToWorkspace x
+handleAction Maximize = onJust focusedClient maximizeClient
 handleAction _  = return ()
 
